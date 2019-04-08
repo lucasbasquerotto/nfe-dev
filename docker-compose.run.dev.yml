@@ -1,0 +1,62 @@
+version: '3.4'
+
+x-logging:
+  logging: &logging
+    options:
+      max-size: 50m
+
+x-services:  
+  main: &main
+    image: $CUSTOM_DEV_WEB_IMAGE:$CUSTOM_DEV_WEB_VERSION
+    volumes:
+    - /app/nfe/data:/var/main:rw
+    logging: *logging   
+
+  awscli: &awscli
+    build: 
+      context: awscli/
+      args:
+        PERL_VERSION: $PERL_VERSION
+        CUSTOM_AWSCLI_IMAGE: $CUSTOM_AWSCLI_IMAGE
+        CUSTOM_AWSCLI_VERSION: $CUSTOM_AWSCLI_VERSION
+        S3_ACCESS_KEY: $S3_BACKUP_ACCESS_KEY
+        S3_SECRET_KEY: $S3_BACKUP_SECRET_KEY
+        S3_REGION: $S3_BACKUP_REGION
+    logging: *logging   
+
+services:
+  
+  main:
+    <<: *main
+    environment:
+    - "clients=clients"
+  
+  main2:
+    <<: *main
+    environment:
+    - "clients=clients2"
+  
+  awscli:
+    <<: *awscli
+    volumes:
+    - /docker/vol:/docker/vol:rw
+  
+  backup:
+    <<: *awscli
+    volumes:
+    - /docker/vol:/aws:ro
+    command: aws s3 sync . s3://$S3_BACKUP_BUCKET/ssl/
+  
+  restore:
+    <<: *awscli
+    volumes:
+    - /docker/vol:/aws:rw
+    command: aws s3 sync s3://$S3_BACKUP_BUCKET/ssl/ ./ 
+  
+  prepare:
+    image: alpine:$ALPINE_VERSION
+    volumes:
+    - /docker/vol:/app:rw
+    logging: *logging
+    command: chmod -R 700 /app/
+      
